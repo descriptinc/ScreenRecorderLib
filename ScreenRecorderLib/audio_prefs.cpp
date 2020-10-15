@@ -12,6 +12,7 @@
 #include "cleanup.h"
 
 
+HRESULT get_default_device(IMMDevice** ppMMDevice, EDataFlow flow);
 HRESULT get_specific_device(LPCWSTR szDeviceId, EDataFlow flow, IMMDevice **ppMMDevice);
 HRESULT open_file(LPCWSTR szFileName, HMMIO *phFile);
 
@@ -113,6 +114,30 @@ HRESULT get_default_device(IMMDevice **ppMMDevice, EDataFlow flow) {
 		ERROR(L"IMMDeviceEnumerator::GetDefaultAudioEndpoint failed: hr = 0x%08x", hr);
 		return hr;
 	}
+
+	return S_OK;
+}
+
+HRESULT get_default_device_id(EDataFlow flow, std::wstring* id) 
+{
+	IMMDevice* pMMDevice;
+	HRESULT hr = get_default_device(&pMMDevice, flow);
+
+	if (FAILED(hr)) {
+		ERROR(L"get_default_device failed: hr = 0x%08x", hr);
+		return hr;
+	}
+
+	ReleaseOnExit releaseMMDevice(pMMDevice);
+
+	LPWSTR deviceID = L"";
+	hr = pMMDevice->GetId(&deviceID);
+	if (FAILED(hr)) {
+		ERROR(L"IMMDevice->GetId(deviceID) failed: hr = 0x%08x", hr);
+		return hr;
+	}
+
+	*id = deviceID;
 
 	return S_OK;
 }

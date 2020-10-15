@@ -18,4 +18,4 @@ public:
 	static HRESULT list_devices(EDataFlow flow, std::map<std::wstring, std::wstring>* devices);
 };
 
-HRESULT get_default_device(IMMDevice** ppMMDevice, EDataFlow flow);
+HRESULT get_default_device_id(EDataFlow flow, std::wstring* id);

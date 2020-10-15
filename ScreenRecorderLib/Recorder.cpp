@@ -146,22 +146,15 @@ String^ Recorder::GetSystemDefaultAudioDevice(AudioDeviceSource source) {
 		break;
 	}
 
-	IMMDevice* pMMDevice;
-	HRESULT hr = get_default_device(&pMMDevice, dFlow);
+	
+	std::wstring id;
+	HRESULT hr = get_default_device_id(dFlow, &id);
 
-	if (FAILED(hr)) {
-		ERROR(L"get_default_device failed: hr = 0x%08x", hr);
-		return nullptr;
+	if (hr == S_OK) {
+		return gcnew String(id.c_str());
 	}
 
-	LPWSTR deviceID = L"";
-	hr = pMMDevice->GetId(&deviceID);
-	if (FAILED(hr)) {
-		ERROR(L"IMMDevice->GetId(deviceID) failed: hr = 0x%08x", hr);
-		return nullptr;
-	}
-
-	return gcnew String(deviceID);
+	return gcnew String("");
 }
 
 Recorder::~Recorder()
