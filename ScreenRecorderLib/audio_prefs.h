@@ -17,3 +17,5 @@ public:
 	// writes all found devices for chosen flow into devices
 	static HRESULT list_devices(EDataFlow flow, std::map<std::wstring, std::wstring>* devices);
 };
+
+HRESULT get_default_device(IMMDevice** ppMMDevice, EDataFlow flow);

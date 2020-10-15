@@ -367,6 +367,7 @@ namespace ScreenRecorderLib {
 		static Recorder^ CreateRecorder();
 		static Recorder^ CreateRecorder(RecorderOptions^ options);
 		static Dictionary<String^, String^>^ GetSystemAudioDevices(AudioDeviceSource source);
+		static String^ GetSystemDefaultAudioDevice(AudioDeviceSource source);
 		event EventHandler<RecordingCompleteEventArgs^>^ OnRecordingComplete;
 		event EventHandler<RecordingFailedEventArgs^>^ OnRecordingFailed;
 		event EventHandler<RecordingStatusEventArgs^>^ OnStatusChanged;

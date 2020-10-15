@@ -12,9 +12,6 @@
 #include "cleanup.h"
 
 
-
-
-HRESULT get_default_device(IMMDevice **ppMMDevice, EDataFlow flow);
 HRESULT get_specific_device(LPCWSTR szDeviceId, EDataFlow flow, IMMDevice **ppMMDevice);
 HRESULT open_file(LPCWSTR szFileName, HMMIO *phFile);
 
