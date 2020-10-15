@@ -6,6 +6,8 @@
 #include "cleanup.h"
 #include "ManagedIStream.h"
 #include "internal_recorder.h"
+#include "audio_prefs.h"
+
 using namespace ScreenRecorderLib;
 using namespace nlohmann;
 
@@ -125,6 +127,34 @@ Dictionary<String^, String^>^ Recorder::GetSystemAudioDevices(AudioDeviceSource 
 		}
 	}
 	return devices;
+}
+
+String^ Recorder::GetSystemDefaultAudioDevice(AudioDeviceSource source) {
+	EDataFlow dFlow;
+
+	switch (source)
+	{
+	default:
+	case  AudioDeviceSource::OutputDevices:
+		dFlow = eRender;
+		break;
+	case AudioDeviceSource::InputDevices:
+		dFlow = eCapture;
+		break;
+	case AudioDeviceSource::All:
+		dFlow = eAll;
+		break;
+	}
+
+	
+	std::wstring id;
+	HRESULT hr = get_default_device_id(dFlow, &id);
+
+	if (hr == S_OK) {
+		return gcnew String(id.c_str());
+	}
+
+	return gcnew String("");
 }
 
 Recorder::~Recorder()
