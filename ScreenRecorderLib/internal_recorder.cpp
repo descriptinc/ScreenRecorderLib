@@ -239,9 +239,10 @@ void internal_recorder::SetMaxVideoHeight(UINT32 value)
 
 std::vector<BYTE> internal_recorder::MixAudio(std::vector<BYTE> &first, std::vector<BYTE> &second)
 {
+	using vect_size = std::vector<BYTE>::size_type;
 	std::vector<BYTE> newvector;
 
-	size_t smaller;
+	vect_size smaller;
 
 	if (first.size() >= second.size())
 	{
@@ -254,7 +255,7 @@ std::vector<BYTE> internal_recorder::MixAudio(std::vector<BYTE> &first, std::vec
 		smaller = first.size();
 	}
 
-	for (int i = 0; i < smaller; i += 2) {
+	for (vect_size i = 0; i < smaller; i += 2) {
 		short buf1A = first[i + 1];
 		short buf2A = first[i];
 		buf1A = (short)((buf1A & 0xff) << 8);
@@ -273,7 +274,7 @@ std::vector<BYTE> internal_recorder::MixAudio(std::vector<BYTE> &first, std::vec
 		newvector[i] = (BYTE)res;
 		newvector[i + 1] = (BYTE)(res >> 8);
 	}
-
+	
 	return newvector;
 }
 
