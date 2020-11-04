@@ -404,7 +404,6 @@ UINT32 loopback_capture::GetInputSampleRate() {
 
 bool loopback_capture::requiresResampling()
 {
-	return true;
 	return inputFormat.sampleRate != outputFormat.sampleRate || outputFormat.nChannels != inputFormat.nChannels;
 }
 
