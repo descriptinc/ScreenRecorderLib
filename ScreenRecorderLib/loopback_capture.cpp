@@ -283,8 +283,10 @@ HRESULT loopback_capture::LoopbackCapture(
 				continue; // exits loop
 			}
 
-			if (bFirstPacket && AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY == dwFlags) {
-				DEBUG(L"Probably spurious glitch reported on first packet on %s", tag);
+			if (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY == dwFlags) {
+				DEBUG(L"Discont!");
+				if(bFirstPacket)
+					DEBUG(L"Probably spurious glitch reported on first packet on %s", tag);
 			}
 			else if (AUDCLNT_BUFFERFLAGS_SILENT == dwFlags) {
 				//INFO(L"IAudioCaptureClient::GetBuffer set flags to 0x%08x on pass %u after %u frames", dwFlags, nPasses, *pnFrames);
@@ -402,6 +404,7 @@ UINT32 loopback_capture::GetInputSampleRate() {
 
 bool loopback_capture::requiresResampling()
 {
+	return true;
 	return inputFormat.sampleRate != outputFormat.sampleRate || outputFormat.nChannels != inputFormat.nChannels;
 }
 

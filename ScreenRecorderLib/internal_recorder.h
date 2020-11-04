@@ -49,6 +49,12 @@ typedef struct
 
 LRESULT CALLBACK MouseHookProc(int nCode, WPARAM wParam, LPARAM lParam);
 
+struct mix_data {
+	std::vector<BYTE> mix;
+	std::vector<BYTE> firstLeftover;
+	std::vector<BYTE> secondLeftover;
+};
+
 class internal_recorder
 {
 public:
@@ -119,6 +125,8 @@ private:
 	IMFSinkWriter *m_SinkWriter = nullptr;
 	ID3D11Device *m_Device = nullptr;
 
+	mix_data previousMixData;
+
 	bool m_LastFrameHadAudio = false;
 	HRESULT m_EncoderResult = S_FALSE;
 	HHOOK m_Mousehook;
@@ -170,7 +178,7 @@ private:
 	//functions
 	std::string CurrentTimeToFormattedString();
 	std::vector<BYTE> GrabAudioFrame(std::unique_ptr<loopback_capture>& pLoopbackCaptureOutputDevice, std::unique_ptr<loopback_capture>& pLoopbackCaptureInputDevice);
-	std::vector<BYTE> MixAudio(std::vector<BYTE> &first, std::vector<BYTE> &second);
+	mix_data MixAudio(std::vector<BYTE> &first, std::vector<BYTE> &second, mix_data const& prevMixData);
 	void SetDebugName(ID3D11DeviceChild* child, const std::string& name);
 	void SetViewPort(ID3D11DeviceContext *deviceContext, UINT Width, UINT Height);
 	std::wstring GetImageExtension();
