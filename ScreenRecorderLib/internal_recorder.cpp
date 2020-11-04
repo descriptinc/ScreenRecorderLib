@@ -254,7 +254,7 @@ mix_data internal_recorder::MixAudio(std::vector<BYTE>& first, std::vector<BYTE>
 	buffer_type newBuffer;
 	newBuffer.resize(shorterBufferSize);
 
-	// Keep a ref to the shorter buffer
+	// Mix the samples in both buffers, but only until in the span covered by the shorter buffer
 	for (size_type i = 0; i < shorterBufferSize; i += 2) {
 		short firstSample = static_cast<short>(first[i] | first[i + 1] << 8);
 		short secondSample = static_cast<short>(second[i] | second[i + 1] << 8);
