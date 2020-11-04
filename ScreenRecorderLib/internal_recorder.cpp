@@ -237,7 +237,7 @@ void internal_recorder::SetMaxVideoHeight(UINT32 value)
 	m_MaxVideoHeight = value;
 }
 
-mix_data internal_recorder::MixAudio(std::vector<BYTE> &first, std::vector<BYTE> &second, mix_data const& prevMixData)
+mix_data internal_recorder::MixAudio(std::vector<BYTE>& first, std::vector<BYTE>& second, mix_data const& prevMixData, bool const isLastCall)
 {
 	using buffer_type = std::vector<BYTE>;
 	using size_type = buffer_type::size_type;
@@ -258,11 +258,11 @@ mix_data internal_recorder::MixAudio(std::vector<BYTE> &first, std::vector<BYTE>
 
 	// Keep a ref to the shorter buffer
 	for (size_type i = 0; i < shorterBufferSize; i += 2) {
-		short firstSample = static_cast<short>(first[i] | first[i+1] << 8);
-		short secondSample = static_cast<short>(second[i] | second[i+1] << 8);
+		short firstSample = static_cast<short>(first[i] | first[i + 1] << 8);
+		short secondSample = static_cast<short>(second[i] | second[i + 1] << 8);
 
 		auto out = reinterpret_cast<short*>(&newBuffer[i]);
-		*out = firstSample + secondSample;
+		*out = firstSample / 2 + secondSample / 2;
 	}
 
 	buffer_type firstLeftover, secondLeftover;
@@ -270,11 +270,27 @@ mix_data internal_recorder::MixAudio(std::vector<BYTE> &first, std::vector<BYTE>
 	{
 		firstLeftover = buffer_type(std::begin(first) + shorterBufferSize, std::end(first));
 		secondLeftover = buffer_type();
-	} 
+	}
 	else
 	{
 		firstLeftover = buffer_type();
 		secondLeftover = buffer_type(std::begin(second) + shorterBufferSize, std::end(second));
+	}
+
+	// in the last call, dump all the data in the output buffer, don't store leftovers if any
+	if (isLastCall && !(firstLeftover.empty() && secondLeftover.empty())) {
+		DEBUG("Last call to MixAudio had leftovers, appending...");
+
+		// Apply the same transform to the leftover as it was done for the other buffers, to avoid
+		// a discontinuity in energy
+		auto& buf = !firstLeftover.empty() ? firstLeftover : secondLeftover;
+		for (size_type i = 0; i < buf.size(); i += 2) {
+			auto out = reinterpret_cast<short*>(&buf[i]);
+			*out = static_cast<short>(buf[i] | buf[i + 1] << 8) / 2;
+		}
+
+		// Append the processed leftover to the end of the mix
+		newBuffer.insert(std::end(newBuffer), std::begin(buf), std::end(buf));
 	}
 
 	return {
@@ -820,7 +836,8 @@ HRESULT internal_recorder::BeginRecording(std::wstring path, IStream *stream) {
 				model.Frame = pPreviousFrameCopy;
 				model.Duration = duration;
 				model.StartPos = lastFrameStartPos;
-				model.Audio = recordAudio ? GrabAudioFrame(pLoopbackCaptureOutputDevice, pLoopbackCaptureInputDevice) : std::vector<BYTE>();
+				bool const isLastCall = true;
+				model.Audio = recordAudio ? GrabAudioFrame(pLoopbackCaptureOutputDevice, pLoopbackCaptureInputDevice, isLastCall) : std::vector<BYTE>();
 				model.FrameNumber = frameNr;
 				hr = m_EncoderResult = RenderFrame(model);
 			}
@@ -973,20 +990,20 @@ void internal_recorder::ResumeRecording() {
 }
 
 std::vector<BYTE> internal_recorder::GrabAudioFrame(std::unique_ptr<loopback_capture> & pLoopbackCaptureOutputDevice,
-	std::unique_ptr<loopback_capture> & pLoopbackCaptureInputDevice)
+	std::unique_ptr<loopback_capture> & pLoopbackCaptureInputDevice, bool const isLastCall)
 {
 	if (m_IsOutputDeviceEnabled && m_IsInputDeviceEnabled && pLoopbackCaptureOutputDevice && pLoopbackCaptureInputDevice) {
 		// mix our audio buffers from output device and input device to get one audio buffer since VideoSinkWriter works only with one Audio sink
 		if (pLoopbackCaptureOutputDevice->PeakRecordedBytes().size() > 0) {
 			std::vector<BYTE> outputDeviceData = pLoopbackCaptureOutputDevice->GetRecordedBytes(0);
 			std::vector<BYTE> inputDeviceData = pLoopbackCaptureInputDevice->GetRecordedBytes(outputDeviceData.size());
-			previousMixData = MixAudio(outputDeviceData, inputDeviceData, previousMixData);
+			previousMixData = MixAudio(outputDeviceData, inputDeviceData, previousMixData, isLastCall);
 			return previousMixData.mix;
 		}
 		else {
 			std::vector<BYTE> inputDeviceData = pLoopbackCaptureInputDevice->GetRecordedBytes();
 			std::vector<BYTE> outputDeviceData = pLoopbackCaptureOutputDevice->GetRecordedBytes(inputDeviceData.size());
-			previousMixData = MixAudio(outputDeviceData, inputDeviceData, previousMixData);
+			previousMixData = MixAudio(outputDeviceData, inputDeviceData, previousMixData, isLastCall);
 			return previousMixData.mix;
 		}
 	}
