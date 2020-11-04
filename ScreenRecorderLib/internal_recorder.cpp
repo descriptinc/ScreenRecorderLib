@@ -366,6 +366,9 @@ HRESULT internal_recorder::BeginRecording(std::wstring path) {
 
 HRESULT internal_recorder::BeginRecording(std::wstring path, IStream *stream) {
 
+	// Clean any previous leftovers.
+	previousMixData = mix_data();
+
 	if (!IsWindows8OrGreater()) {
 		wstring errorText = L"Windows 8 or higher is required";
 		ERROR(L"%ls", errorText);
