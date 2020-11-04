@@ -84,6 +84,19 @@ CreateResamplerMFT(
 	RETURN_ON_BAD_HR(spTransformUnk->QueryInterface(IID_PPV_ARGS(&spResamplerProps)));
 	RETURN_ON_BAD_HR(spResamplerProps->SetHalfFilterLength(halfFilterLength));
 
+	/* Not sure we _need_ this (as in, it may be done automatically),
+	 * but I'll keep it around until demonstrated otherwise */
+#if RESAMPLER_NEEDS_LOWPASS_FILTER
+	/* Set up a low-pass filter at half of the 
+	 * output sample rate */
+	CComPtr<IPropertyStore> propStore;
+	RETURN_ON_BAD_HR(spTransformUnk->QueryInterface(IID_PPV_ARGS(&propStore)));
+	PROPVARIANT value;
+	value.vt = VT_R4;
+	value.fltVal = 0.5;
+	RETURN_ON_BAD_HR(propStore->SetValue(MFPKEY_WMRESAMP_LOWPASS_BANDWIDTH, value));
+#endif
+
 	*ppTransform = pTransform;
 	(*ppTransform)->AddRef();
 

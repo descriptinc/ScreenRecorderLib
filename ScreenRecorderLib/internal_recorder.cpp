@@ -237,44 +237,66 @@ void internal_recorder::SetMaxVideoHeight(UINT32 value)
 	m_MaxVideoHeight = value;
 }
 
-std::vector<BYTE> internal_recorder::MixAudio(std::vector<BYTE> &first, std::vector<BYTE> &second)
+mix_data internal_recorder::MixAudio(std::vector<BYTE>& first, std::vector<BYTE>& second, mix_data const& prevMixData, bool const isLastCall)
 {
-	std::vector<BYTE> newvector;
+	using buffer_type = std::vector<BYTE>;
+	using size_type = buffer_type::size_type;
 
-	size_t smaller;
+	// Pre-pad the buffers with the data left over from the previous iteration
+	first.insert(first.begin(), prevMixData.firstLeftover.begin(), prevMixData.firstLeftover.end());
+	second.insert(second.begin(), prevMixData.secondLeftover.begin(), prevMixData.secondLeftover.end());
 
-	if (first.size() >= second.size())
+	// Determine which is the shorter of the two buffers
+	bool isFirstShorter = first.size() < second.size();
+	auto const shorterBufferSize = isFirstShorter ? first.size() : second.size();
+
+	// Reserver enough space in the output buffer for the min(first,second)
+	buffer_type newBuffer;
+	newBuffer.resize(shorterBufferSize);
+
+	// Mix the samples in both buffers, but only until in the span covered by the shorter buffer
+	for (size_type i = 0; i < shorterBufferSize; i += 2) {
+		short firstSample = static_cast<short>(first[i] | first[i + 1] << 8);
+		short secondSample = static_cast<short>(second[i] | second[i + 1] << 8);
+
+		auto out = reinterpret_cast<short*>(&newBuffer[i]);
+		*out = firstSample / 2 + secondSample / 2;
+	}
+
+	// Compute the leftovers for the next iteration
+	buffer_type firstLeftover, secondLeftover;
+	if (isFirstShorter)
 	{
-		newvector.insert(newvector.end(), first.begin(), first.end());
-		smaller = second.size();
+		firstLeftover = buffer_type();
+		secondLeftover = buffer_type(std::begin(second) + shorterBufferSize, std::end(second));
 	}
 	else
 	{
-		newvector.insert(newvector.end(), second.begin(), second.end());
-		smaller = first.size();
+		firstLeftover = buffer_type(std::begin(first) + shorterBufferSize, std::end(first));
+		secondLeftover = buffer_type();
 	}
 
-	for (int i = 0; i < smaller; i += 2) {
-		short buf1A = first[i + 1];
-		short buf2A = first[i];
-		buf1A = (short)((buf1A & 0xff) << 8);
-		buf2A = (short)(buf2A & 0xff);
+	// in the last call, dump all the data in the output buffer, don't store leftovers if any
+	if (isLastCall && !(firstLeftover.empty() && secondLeftover.empty())) {
+		DEBUG("Last call to MixAudio had leftovers, appending...");
 
-		short buf1B = second[i + 1];
-		short buf2B = second[i];
-		buf1B = (short)((buf1B & 0xff) << 8);
-		buf2B = (short)(buf2B & 0xff);
+		// Apply the same transform to the leftover as it was done for the other buffers, to avoid
+		// a discontinuity in energy
+		auto& buf = !firstLeftover.empty() ? firstLeftover : secondLeftover;
+		for (size_type i = 0; i < buf.size(); i += 2) {
+			auto out = reinterpret_cast<short*>(&buf[i]);
+			*out = static_cast<short>(buf[i] | buf[i + 1] << 8) / 2;
+		}
 
-		short buf1C = (short)(buf1A + buf1B);
-		short buf2C = (short)(buf2A + buf2B);
-
-		short res = (short)(buf1C + buf2C);
-
-		newvector[i] = (BYTE)res;
-		newvector[i + 1] = (BYTE)(res >> 8);
+		// Append the processed leftover to the end of the mix
+		newBuffer.insert(std::end(newBuffer), std::begin(buf), std::end(buf));
 	}
 
-	return newvector;
+	return {
+		newBuffer,
+		firstLeftover,
+		secondLeftover,
+	};
 }
 
 std::wstring internal_recorder::GetImageExtension() {
@@ -343,6 +365,9 @@ HRESULT internal_recorder::BeginRecording(std::wstring path) {
 }
 
 HRESULT internal_recorder::BeginRecording(std::wstring path, IStream *stream) {
+
+	// Clean any previous leftovers.
+	previousMixData = mix_data();
 
 	if (!IsWindows8OrGreater()) {
 		wstring errorText = L"Windows 8 or higher is required";
@@ -813,7 +838,8 @@ HRESULT internal_recorder::BeginRecording(std::wstring path, IStream *stream) {
 				model.Frame = pPreviousFrameCopy;
 				model.Duration = duration;
 				model.StartPos = lastFrameStartPos;
-				model.Audio = recordAudio ? GrabAudioFrame(pLoopbackCaptureOutputDevice, pLoopbackCaptureInputDevice) : std::vector<BYTE>();
+				bool const isLastCall = true;
+				model.Audio = recordAudio ? GrabAudioFrame(pLoopbackCaptureOutputDevice, pLoopbackCaptureInputDevice, isLastCall) : std::vector<BYTE>();
 				model.FrameNumber = frameNr;
 				hr = m_EncoderResult = RenderFrame(model);
 			}
@@ -966,19 +992,21 @@ void internal_recorder::ResumeRecording() {
 }
 
 std::vector<BYTE> internal_recorder::GrabAudioFrame(std::unique_ptr<loopback_capture> & pLoopbackCaptureOutputDevice,
-	std::unique_ptr<loopback_capture> & pLoopbackCaptureInputDevice)
+	std::unique_ptr<loopback_capture> & pLoopbackCaptureInputDevice, bool const isLastCall)
 {
 	if (m_IsOutputDeviceEnabled && m_IsInputDeviceEnabled && pLoopbackCaptureOutputDevice && pLoopbackCaptureInputDevice) {
 		// mix our audio buffers from output device and input device to get one audio buffer since VideoSinkWriter works only with one Audio sink
 		if (pLoopbackCaptureOutputDevice->PeakRecordedBytes().size() > 0) {
 			std::vector<BYTE> outputDeviceData = pLoopbackCaptureOutputDevice->GetRecordedBytes(0);
 			std::vector<BYTE> inputDeviceData = pLoopbackCaptureInputDevice->GetRecordedBytes(outputDeviceData.size());
-			return std::move(MixAudio(outputDeviceData, inputDeviceData));
+			previousMixData = MixAudio(outputDeviceData, inputDeviceData, previousMixData, isLastCall);
+			return previousMixData.mix;
 		}
 		else {
 			std::vector<BYTE> inputDeviceData = pLoopbackCaptureInputDevice->GetRecordedBytes();
 			std::vector<BYTE> outputDeviceData = pLoopbackCaptureOutputDevice->GetRecordedBytes(inputDeviceData.size());
-			return std::move(MixAudio(outputDeviceData, inputDeviceData));
+			previousMixData = MixAudio(outputDeviceData, inputDeviceData, previousMixData, isLastCall);
+			return previousMixData.mix;
 		}
 	}
 	else if (m_IsOutputDeviceEnabled && pLoopbackCaptureOutputDevice)
