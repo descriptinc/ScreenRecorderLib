@@ -246,14 +246,12 @@ mix_data internal_recorder::MixAudio(std::vector<BYTE>& first, std::vector<BYTE>
 	first.insert(first.begin(), prevMixData.firstLeftover.begin(), prevMixData.firstLeftover.end());
 	second.insert(second.begin(), prevMixData.secondLeftover.begin(), prevMixData.secondLeftover.end());
 
-	// Initialize the output buffer with the data from the longer one
-	buffer_type newBuffer;
-	bool isFirstLonger = first.size() > second.size();
-	buffer_type& longerBuffer = isFirstLonger ? first : second;
-	auto const longerBufferSize = longerBuffer.size();
+	// Determine which is the shorter of the two buffers
+	bool isFirstShorter = first.size() < second.size();
+	auto const shorterBufferSize = isFirstShorter ? first.size() : second.size();
 
-	buffer_type& shorterBuffer = isFirstLonger ? second : first;
-	auto const shorterBufferSize = shorterBuffer.size();
+	// Reserver enough space in the output buffer for the min(first,second)
+	buffer_type newBuffer;
 	newBuffer.resize(shorterBufferSize);
 
 	// Keep a ref to the shorter buffer
@@ -265,16 +263,17 @@ mix_data internal_recorder::MixAudio(std::vector<BYTE>& first, std::vector<BYTE>
 		*out = firstSample / 2 + secondSample / 2;
 	}
 
+	// Compute the leftovers for the next iteration
 	buffer_type firstLeftover, secondLeftover;
-	if (first.size() > second.size())
-	{
-		firstLeftover = buffer_type(std::begin(first) + shorterBufferSize, std::end(first));
-		secondLeftover = buffer_type();
-	}
-	else
+	if (isFirstShorter)
 	{
 		firstLeftover = buffer_type();
 		secondLeftover = buffer_type(std::begin(second) + shorterBufferSize, std::end(second));
+	}
+	else
+	{
+		firstLeftover = buffer_type(std::begin(first) + shorterBufferSize, std::end(first));
+		secondLeftover = buffer_type();
 	}
 
 	// in the last call, dump all the data in the output buffer, don't store leftovers if any
