@@ -178,7 +178,7 @@ private:
 	//functions
 	std::string CurrentTimeToFormattedString();
 	std::vector<BYTE> GrabAudioFrame(std::unique_ptr<loopback_capture>& pLoopbackCaptureOutputDevice, std::unique_ptr<loopback_capture>& pLoopbackCaptureInputDevice, bool isLastCall = false);
-	mix_data MixAudio(std::vector<BYTE>& first, std::vector<BYTE>& second, mix_data const& prevMixData, bool const isLastCall = true);
+	mix_data MixAudio(std::vector<BYTE>& first, std::vector<BYTE>& second, mix_data const& prevMixData, bool const isLastCall);
 	void SetDebugName(ID3D11DeviceChild* child, const std::string& name);
 	void SetViewPort(ID3D11DeviceContext *deviceContext, UINT Width, UINT Height);
 	std::wstring GetImageExtension();
