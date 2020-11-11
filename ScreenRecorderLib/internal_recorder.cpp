@@ -242,9 +242,36 @@ mix_data internal_recorder::MixAudio(std::vector<BYTE>& first, std::vector<BYTE>
 	using buffer_type = std::vector<BYTE>;
 	using size_type = buffer_type::size_type;
 
+	static auto halveSamples = [](buffer_type& buffer, size_type offset, size_type length) {
+		for (size_type i = offset; i < length; i += 2) {
+			auto out = reinterpret_cast<short*>(&buffer[i]);
+			*out = static_cast<short>(buffer[i] | buffer[i + 1] << 8) / 2;
+		}
+	};
+
 	// Pre-pad the buffers with the data left over from the previous iteration
 	first.insert(first.begin(), prevMixData.firstLeftover.begin(), prevMixData.firstLeftover.end());
 	second.insert(second.begin(), prevMixData.secondLeftover.begin(), prevMixData.secondLeftover.end());
+
+	// If either buffer is completely empty (even after accounding for leftovers, 
+	// make the output be whatever data we have from the other buffer. Apparently
+	// the loopback interface does not produce data when there is no actual sound
+	// playing
+	if (first.empty() || second.empty()) {
+		// Determine which buffer to process & return
+		auto& nonEmptyBuffer = first.empty() ? second : first;
+
+		// Apply the same operation to the buffer samples to avoid discontinuities
+		// in energy
+		halveSamples(nonEmptyBuffer, 0, nonEmptyBuffer.size());
+
+		// Return the sample buffer as the mix. 
+		return {
+			nonEmptyBuffer,
+			buffer_type(),
+			buffer_type()
+		};
+	}
 
 	// Determine which is the shorter of the two buffers
 	bool isFirstShorter = first.size() < second.size();
@@ -283,10 +310,7 @@ mix_data internal_recorder::MixAudio(std::vector<BYTE>& first, std::vector<BYTE>
 		// Apply the same transform to the leftover as it was done for the other buffers, to avoid
 		// a discontinuity in energy
 		auto& buf = !firstLeftover.empty() ? firstLeftover : secondLeftover;
-		for (size_type i = 0; i < buf.size(); i += 2) {
-			auto out = reinterpret_cast<short*>(&buf[i]);
-			*out = static_cast<short>(buf[i] | buf[i + 1] << 8) / 2;
-		}
+		halveSamples(buf, 0, buf.size());
 
 		// Append the processed leftover to the end of the mix
 		newBuffer.insert(std::end(newBuffer), std::begin(buf), std::end(buf));
